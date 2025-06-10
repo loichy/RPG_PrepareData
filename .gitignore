@@ -57,5 +57,6 @@ data/final/*.rds
 # Output
 output/*.html
 output/*.pdf
+output/*
 
 
