@@ -51,4 +51,7 @@ rsconnect/
 # Data
 data/derived/~
 data/raw/~
+data/shapefiles/~
+data/final/*.rds
+
 

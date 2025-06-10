@@ -192,3 +192,6 @@ for(i in seq(all_rpg_links$url)){
   Sys.sleep(1)
 }
 
+# Note that for year 2013 and 2014, data had to be downloaded by hand and unzipped in the data$raw folder
+# By creating files (could not work otherwise due to unzip errors in the downloaded files)
+
