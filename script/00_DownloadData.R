@@ -1,7 +1,7 @@
 #===============================================================================
-# Description: Extract all file names of RPG data on the URL adress
-# author: 
+# Description: Extract all file names of RPG data and download them
 #===============================================================================
+
 #===============================================================================
 # 1). Prepare environment ------
 #===============================================================================
@@ -111,18 +111,36 @@ all_rpg_links <- url_df %>%
   arrange(year, region_name) %>% 
   mutate(url = gsub("[\r\n]", "", url))
 
-# Avant la boucle (à l'extérieur): créer une data frame vide ou une liste qui est vide
-tableau_final <- list()
+# Update all_rpg_links file:
+# Add years 2013 and 2014 for all regions which was missing
+all_rpg_links_2013 <- tibble(
+  region_code = unique(all_rpg_links$region_code), 
+  region_name = unique(all_rpg_links$region_name), 
+  year = "2013",
+  url = NA
+)
+all_rpg_links_2014 <- tibble(
+  region_code = unique(all_rpg_links$region_code), 
+  region_name = unique(all_rpg_links$region_name), 
+  year = "2014",
+  url = NA
+)
+all_rpg_links <- bind_rows(all_rpg_links, all_rpg_links_2013, all_rpg_links_2014) %>% 
+  arrange(year, region_name)
+# table(all_rpg_links$region_code, all_rpg_links$year)
 
 # Save all-rpg_lings dataset in RDS format
-saveRDS(all_rpg_links, here(dir$raw, "rpg_files.rds"), )
+saveRDS(all_rpg_links, here(dir$raw, "rpg_files.rds"))
+
+# Avant la boucle (à l'extérieur): créer une data frame vide ou une liste qui est vide
+tableau_final <- list()
 
 #===============================================================================
 # 2). From URL links: download archive in proper folder and unarchive it
 #===============================================================================
 ##### Create a loop that download all RPG data files
 all_rpg_links <- all_rpg_links %>% 
-  filter(region_code != "R94") # Except Corsica
+  filter(region_code != "R94", !( year %in% c("2013","2014"))) # Except Corsica, and years without url links
 
 # First funcction: download data
 # Takes approximately five hours (DO NOT RUN!)
@@ -191,4 +209,8 @@ for(i in seq(all_rpg_links$url)){
 
   Sys.sleep(1)
 }
+
+# Note that for year 2013 and 2014, data had to be downloaded by hand and unzipped in the data$raw folder
+# By creating files (could not work otherwise due to unzip errors in the downloaded files)
+
 

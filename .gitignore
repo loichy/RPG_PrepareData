@@ -47,3 +47,16 @@ po/*~
 
 # RStudio Connect folder
 rsconnect/
+
+# Data
+data/derived/~
+data/raw/~
+data/shapefiles/*
+data/final/*.rds
+
+# Output
+output/*.html
+output/*.pdf
+output/*
+
+
