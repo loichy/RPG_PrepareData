@@ -33,22 +33,7 @@ lapply(dir, function(i) dir.create(i, recursive = T, showWarnings = F))
 # 2) Load list of downloaded RPG files  ------
 #===============================================================================
 all_rpg_links <- readRDS(here(dir$raw, "rpg_files.rds"))
-# Add years 2013 and 2014 for all regions which was missing
-all_rpg_links_2013 <- tibble(
-  region_code = unique(all_rpg_links$region_code), 
-  region_name = unique(all_rpg_links$region_name), 
-  year = "2013",
-  url = NA
-  )
-all_rpg_links_2014 <- tibble(
-  region_code = unique(all_rpg_links$region_code), 
-  region_name = unique(all_rpg_links$region_name), 
-  year = "2014",
-  url = NA
-)
-all_rpg_links <- bind_rows(all_rpg_links, all_rpg_links_2013, all_rpg_links_2014) %>% 
-  arrange(year, region_name)
-# table(all_rpg_links$region_code, all_rpg_links$year)
+
 
 #===============================================================================
 # 3) Aggregate all shp files by region and year at the commune level ------

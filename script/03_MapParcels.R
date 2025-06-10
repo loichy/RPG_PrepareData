@@ -13,14 +13,17 @@ gc()
 
 # Load package
 if (!require("pacman")) install.packages("pacman")
-pacman::p_load(tidyverse, data.table, here, sf, tmap, patchwork)
+pacman::p_load(tidyverse, data.table, here, sf, tmap, patchwork, rmapshaper, htmlwidgets, leaflet)
 
 # List directories 
 dir <- list()
 dir$root <- here()
 dir$data <- here(dir$root, "data")
+dir$sf <- here(dir$data, "shapefiles")
 dir$raw <- here(dir$data, "raw")
+# dir$raw <- "C:/Users/loihenry/Dropbox/Recherche_Dauphine/DataArchive/RPG_data/Data/raw"
 dir$derived <- here(dir$data, "derived")
+dir$detailed <- "C:/Users/loihenry/Dropbox/Recherche_Dauphine/DataArchive/RPG_data/Data/detailed_communes"
 dir$script <- here(dir$root, "script")
 dir$output <- here(dir$root, "output")
 
@@ -37,7 +40,7 @@ list_rpg_files <- readRDS(here(dir$raw, "rpg_files.rds"))
 # 3) Parametrize according to the region, year and zoom  ------
 #===============================================================================
 region_code <- "R94"    # Code région (exemple : Corse = R94)
-year1 <- 2022            # Année1
+year1 <- 2015           # Année1
 year2 <- 2023            # Année2 
 zoom_factor <- 0.2       # Proportion de zoom (0.1 = 10%)
 
@@ -45,7 +48,7 @@ zoom_factor <- 0.2       # Proportion de zoom (0.1 = 10%)
 # 4) Find and read the parcel shape file  ------
 #===============================================================================
 # Look for all parcelles graphiques files
-shp_files_all <- list.files(dir$derived, pattern = "RPG_Aggregated*", recursive = TRUE, full.names = TRUE)
+shp_files_all <- list.files(dir$detailed, pattern = "RPG_Detailed*", recursive = TRUE, full.names = TRUE)
 
 # Filter those for the parametrized region and year
 shp_files_filtered_year1 <- shp_files_all[
@@ -62,25 +65,41 @@ shp_file_year1 <- shp_files_filtered_year1[1]
 shp_file_year2 <- shp_files_filtered_year2[1]
 
 # Read the file
-rpg_year1 <- readRDS(shp_file_year1)
-rpg_year2 <- readRDS (shp_file_year2)
+rpg_year1 <- read_sf(shp_file_year1)
+rpg_year2 <- read_sf(shp_file_year2)
 
 rpg_data <- rpg_year1 |> 
   bind_rows(rpg_year2)
 
-#RAPPEL : PROBLEME DE COORDONNEES CAR MANQUE GEOMETRIE DE LA COMMUNE DANS DATAFRAME
+# Add label
+cultures <- read_delim(here(dir$raw,"REF_CULTURES_GROUPES_CULTURES_2020.csv"), delim = ";")
+cultures <- cultures %>%
+  mutate(CODE_GROUPE_CULTURE = as.character(CODE_GROUPE_CULTURE))
+
+cultures_clean <- cultures %>%
+  select(-CODE_CULTURE, -LIBELLE_CULTURE) %>% 
+  group_by(CODE_GROUPE_CULTURE) %>%
+  summarise(
+    CODE_GR = first(CODE_GROUPE_CULTURE),
+    LIBELLE_GROUPE_CULTURE = first(LIBELLE_GROUPE_CULTURE),
+    .groups = "drop"
+  ) %>% 
+  select(-CODE_GROUPE_CULTURE)
+
+rpg_data <- rpg_data |>
+  left_join(cultures_clean, by = c("CODE_GR"))
+
 #===============================================================================
 # 5) Read the commune shape file  ------
 #===============================================================================
 
-communes <- st_read(here(dir$raw, "communes-20220101.shp"), quiet = TRUE)
+communes <- st_read(here(dir$sf, "communes-corsica-20220101.shp"), quiet = TRUE)
 
-# Set same CRS 
+# Set same CRS
 communes <- st_transform(communes, st_crs(rpg_year1))
-communes <- st_transform(communes, st_crs(rpg_year2))
 
 #===============================================================================
-# 6) Plot  ------
+# 6) Static plot  ------
 #===============================================================================
 
 #  Calcul des limites pour zoomer
@@ -109,11 +128,11 @@ rpg_simple <- st_simplify(rpg_data, dTolerance = 100)
 
 #  Map
 map <- ggplot() +
-  geom_sf(data = communes_simple, fill = NA, color = "black") +
-  geom_sf(data = rpg_simple, aes(fill = CODE_CULTU), color = NA, alpha = 0.35) +
+  geom_sf(data = rpg_simple, aes(fill = CODE_CU), color = NA, alpha = 0.35) +
+  facet_wrap(~YEAR) +
   geom_sf_text(data = communes_simple, aes(label = nom), size = 3) +
+  geom_sf(data = communes_simple, fill = NA, color = "black") +
   coord_sf(xlim = xlim_zoom, ylim = ylim_zoom) +
-  facet_wrap(~year) +
   theme_minimal() +
   theme(legend.position="right")
 
@@ -122,65 +141,68 @@ ggsave(filename = file.path(dir$output, paste0("map_", region_code, "_", year1, 
        plot = map, width = 18, height = 9, device = cairo_pdf)
 
 
+#===============================================================================
+# 7) Interactive plot  ------
+#===============================================================================
 #Map interactive 
-library(sf)
-library(leaflet)
-library(dplyr)
+
 
 #Charger le fichier
-parcelles <- rpg_data %>%
-  st_transform(4326) #conversion des coordonnées pour utilisation package leaflet
+parcelles <- rpg_data  %>%
+  st_make_valid(my_sf) %>% 
+  st_transform(4326)   #conversion des coordonnées pour utilisation package leaflet
 
-unique(parcelles$year)
+parcelles_simplify <- ms_simplify(parcelles, keep = 0.15)
+
+unique(parcelles$YEAR)
 
 #Création de 3 couches distinctes 
-parcelles_vierge <- parcelles 
-parcelles_2022 <- parcelles %>% filter (year == 2022)
-parcelles_2023 <- parcelles %>% filter (year == 2023)
+parcelles_vierge <- parcelles_simplify 
+parcelles_1 <- parcelles_simplify %>% filter (YEAR == "2015")
+parcelles_2 <- parcelles_simplify %>% filter (YEAR == "2023")
 
 #Palette de n couleurs (n = nombre de cultures présentent dans CODE_CULTU)
-palette_culture <- colorFactor(rainbow(length(unique(parcelles$CODE_CULTU))),
-                                                  parcelles$CODE_CULTU)
+palette_culture <- colorFactor(rainbow(length(unique(parcelles$CODE_GR))),
+                                                  parcelles$CODE_GR)
 
 #Création de la carte interactive                                
 carte_interactive_Corse <- leaflet() %>%
   addProviderTiles("CartoDB.Positron") %>% #ajout d'un fond de carte CartoDB
   
-  # Calque 1 : contours vierge
-  addPolygons(data = parcelles_vierge,
-              weight = 1,
-              color = NA,
-              fill = FALSE,
-              group = "Fond vierge") %>%
+  # # Calque 1 : contours vierge
+  # addPolygons(data = parcelles_vierge,
+  #             weight = 1,
+  #             color = NA,
+  #             fill = FALSE,
+  #             group = "Fond vierge") %>%
   
-  # Calque 2 : 2012 coloré par culture
-  addPolygons(data = parcelles_2022,
-              fillColor = ~palette_culture(CODE_CULTU),
+  # Calque 2 : 201 coloré par culture
+  addPolygons(data = parcelles_1,
+              fillColor = ~palette_culture(CODE_GR),
               color = "black", weight = 0.5,
               fillOpacity = 0.6,
-              label = ~paste("Culture:", CODE_CULTU), #affichage label en survol avec le nom de la culture 
+              label = ~paste("Culture:", CODE_GR), #affichage label en survol avec le nom de la culture 
               group = "Cultures 2022") %>%
   
   # Calque 3 : 2023 coloré par culture
-  addPolygons(data = parcelles_2023,
-              fillColor = ~palette_culture(CODE_CULTU),
+  addPolygons(data = parcelles_2,
+              fillColor = ~palette_culture(CODE_GR),
               color = "black", weight = 0.5,
               fillOpacity = 0.6,
-              label = ~paste("Culture:", CODE_CULTU),
+              label = ~paste("Culture:", CODE_GR),
               group = "Cultures 2023") %>%
   
   # Légende
   addLegend("bottomleft", pal = palette_culture,
-            values = unique(parcelles$CODE_CULTU),
+            values = unique(parcelles$CODE_GR),
             title = "Cultures") %>%
   
   # Contrôle des calques (bascule entre les différents calques)
   addLayersControl(
-    baseGroups = c("Fond vierge"),
-    overlayGroups = c("Cultures 2022", "Cultures 2023"),
+    # baseGroups = c("Fond vierge"),
+    overlayGroups = c("Cultures 2015", "Cultures 2023"),
     options = layersControlOptions(collapsed = FALSE)
   ) 
 
 #Sauvegarder la carte interactive 
-library(htmlwidgets)
 saveWidget(carte_interactive_Corse, file = file.path(dir$output, "carte_interactive_corse.html"), selfcontained = FALSE)

@@ -20,8 +20,9 @@ dir <- list()
 dir$root <- here()
 dir$data <- here(dir$root, "data")
 dir$raw <- here(dir$data, "raw")
+dir$sf <- here(dir$data, "shapefiles")
 dir$derived <- here(dir$data, "derived")
-dir$derived <- "C:/Users/loihenry/Dropbox/Recherche_Dauphine/DataArchive/RPG_data/Data/aggregated_communes"
+# dir$derived <- "C:/Users/loihenry/Dropbox/Recherche_Dauphine/DataArchive/RPG_data/Data/aggregated_communes"
 dir$final <- here(dir$data, "final")
 dir$script <- here(dir$root, "script")
 dir$output <- here(dir$root, "output")
