@@ -1,0 +1,105 @@
+---
+title: "Archive Sheet – Preparation of RPG Data"
+author: "Loïc Henry"
+date: "2026-05-06"
+output: html_document
+---
+
+# Data Overview
+
+This work draws on the **Registre Parcellaire Graphique (RPG)** geographic database, produced by the *Agence de Services et de Paiement* (ASP) since 2007 and publicly available at <https://geoservices.ign.fr/rpg>.
+
+These annual datasets contain the graphic boundaries of agricultural parcels along with their primary crop type, covering the entire French territory including Mayotte and Saint-Martin, but excluding Saint-Barthélemy.
+
+In addition to the RPG parcel data, the workflow relies on reference tables. One essential reference table maps all crop codes used in the dataset.
+
+# Replication Instructions: Preparing the Registre Parcellaire Graphique (RPG) Data
+
+The main objetive of the data preparation is to aggregate the plot level data at a larger spatial scale, either commmune-level or regional scale. The data preparation pipeline transforms raw RPG files into analysis-ready datasets through the following steps.
+
+## Step 1 — Download Raw Data
+
+**Script:** `00_DownloadData.R`
+
+Downloads the raw RPG files for the analysis period (2007–2024) from the IGN public data service.
+One individual download consist of one year-region vintage. This step thus downloads multiple
+files which are then stored in `data/raw/` for subsequent processing.
+
+## Step 2 — Aggregate Parcel Data
+
+### Step 2a — Regional aggregation
+
+**Script:** `01_AggregateData.R`
+
+All available downloaded `shapefile` inputs are aggregated by region and year at the municipal (*commune*) level of detail, or at the regional (*petites régions agricoles*) level. This intermediate aggregation is designed to reduce file sizes and facilitate downstream processing.
+
+Aggregation is done both at the broader crop group level (20-ish crop categories)
+and at the finer specific crop type level (about 200 crop types).
+
+**Output:** one `.rds` file per region × year combination.
+
+### Step 2b — National consolidation
+
+**Script:** `02_AssembleData.R`
+
+The `.rds` files produced in Step 2a are merged into a single national dataset for all years. This step includes:
+
+- Cleaning inconsistencies across regional files
+- Re-aggregating by crop group
+- Producing a homogeneous national panel ready for large-scale analysis
+
+**Output:** `RPG_Aggregated_ALL_wide.rds` (stored in `data/final/`)
+
+# Mapping and Visualizing data (Exploratory)
+
+The following scripts were developed for exploratory work at a local scale (only for one region) and are not part of the main pipeline, but mainly there to run some premiminary exploratory analysis on RPG data.
+
+**Script:** `03_MapCommunes.R` — Annual crop maps at the municipal level. Provides a static snapshot of the agricultural situation in the study region at a given year.
+
+**Script:** `03_MapParcels.R` — Inter-annual comparison of agricultural parcels. Enables spatial analysis of crop changes and land-use dynamics within a given region, producing both static and interactive maps.
+
+# Descriptive Statistics
+
+After running the scripts from `00_XXX`to `02_XXX` above, the final dataset aggregates RPG parcel data at the municipal (or regional) and national levels for all years.
+
+The code block below computes basic summary statistics from the final wide-format dataset.
+
+```{r prepare_environment, include = FALSE}
+# Clean memory 
+rm(list = ls())
+gc()
+
+# Load packages
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(dplyr, here, tidyr)
+
+# Define directory structure
+dir <- list()
+dir$root     <- here()
+dir$data     <- here(dir$root, "data")
+dir$raw      <- here(dir$data, "raw")
+dir$derived  <- here(dir$data, "derived")
+dir$final    <- here(dir$data, "final")
+dir$script   <- here(dir$root, "script")
+dir$output   <- here(dir$root, "output")
+
+# Create directories if they do not already exist
+lapply(dir, function(i) dir.create(i, recursive = TRUE, showWarnings = FALSE))
+```
+
+```{r}
+RPG_wide <- readRDS(here(dir$final, "RPG_Aggregated_ALL_wide.rds"))
+
+cultures_stat <- RPG_wide %>%
+  group_by(year) %>%
+  summarise(
+    N_communes          = n_distinct(insee),
+    surf_agri_year      = sum(surf_agri_geo_unit_m2, na.rm = TRUE)
+  ) %>%
+  mutate(
+    mean_surf_agri_communes = surf_agri_year / N_communes,
+    mean_surf_agri_tot      = mean(surf_agri_year)
+  )
+
+print(cultures_stat)
+```
