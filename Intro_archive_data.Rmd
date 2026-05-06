@@ -1,0 +1,88 @@
+---
+title: "Fiche archive - contenu de branche PrepareData"
+author: "Aziliz"
+date: "2025-06-06"
+output: html_document
+---
+
+# Présentation des données 
+
+Le travail qui suit s'appuie sur la base de données géographiques RPG, produite par l'Agence de Services et de Paiement (ASP), depuis 2007 et disponible dans le cadre du service public sur <https://geoservices.ign.fr/rpg>.
+
+Ces jeux de données, par année, regroupe les données graphiques des parcelles associées à leur culture principale, pour l'ensemble du territoire français, y compris Mayotte et Saint-Martin, mais hors Saint-Bartélémy. 
+
+A ces données RPG, s'ajoute des référentiels. Un des référentiels nécessaire à l'utilisation des données est celui contenant l'ensemble des codes cultures utilisés. 
+
+# Préparer les données du recensement parcellaire graphique (RPG) 
+
+L'exploitation des données RPG donne lieu à la manipulation de celles-ci afin de : 
+
+- télécharger les fichiers bruts nécessaire à l'analyse, ici sur la période 2007-2023 (**`00_DownloadData.R`**)
+- agréger les données : 
+  - Tous les fichers `shapefile`disponibles sont regroupés par région et par année, avec un niveau de détail à l'échelle communale, afin de faciliter leur traitement ultérieur (**`01_AggregateAIIRPG.R`**).
+  - Les fichiers `.rds` issus de cette première agrégation régionale sont consolidés, nettoyés des incohérences et réagrégés pour constituer une base nationale homogène, organisée selon les groupes de cultures et prête à être utilisée pour des analyses à plus grande échelle (**`05_AggregateData-France.R`**).
+
+# Traitements spécifiques régionaux
+
+## Préparation des données
+Certains traitements préalables ont été effectués manuellement pour explorer et visualiser les données RPG à une échelle locale : 
+
+- Préparation manuelle des données RPG pour la Corse (2022) avec ajout des libellés de cultures (**`01_PrepareData.R`**).
+- Jointure des données RPG avec les limites communales et aggrégation des surfaces agricoles par communes et par culture (**`O3_AggregateData.R`**). Ce traitement permet de créer une base de données locale pour des analyses et également la production de cartes.
+
+## Visualisation graphique des données parcellaires
+
+Grace aux données graphiques des parcelles agricoles, deux scripts complémentaires sont réalisés, à l'échelle des parcelles. Ils sont destinés à la visualisation des données RPG au niveau régional et communal : 
+
+- Cartographie annuelle des cultures au niveau communal (**`02_MapCommunes.R`**)
+Ce script offre un aperçu de la situation agricole à une date donnée dans la région étudiée - cartes statiques.
+- Comparaison inter-annuelle des parcelles agricoles (**`02_MapParcels.R`**)
+Ce script permet l'analyse des évolutions spatiales et des changements de cultures au sein d'une même région - cartes statiques et interactive.
+
+## Brève description
+
+Après exécution des scripts ci-dessus, nous obtenons le tableau de données issues du RPG aggrégées à l'échelle des communes et de la France. 
+
+### Quelques statistiques descriptives
+```{r prepare_environement, include = FALSE}
+# Clean memory 
+rm(list=ls())
+gc()
+
+# Load package
+if (!require("pacman")) install.packages("pacman")
+pacman::p_load(dplyr, here, tidyr)
+
+# List directories 
+dir <- list()
+dir$root <- here()
+dir$data <- here(dir$root, "data")
+dir$raw <- here(dir$data, "raw")
+dir$derived <- here(dir$data, "derived")
+dir$final <- here(dir$data, "final")
+dir$script <- here(dir$root, "script")
+dir$output <- here(dir$root, "output")
+dir$faostat_data <- here(dir$root, "faostat_data")
+
+# Create non existing directories
+lapply(dir, function(i) dir.create(i, recursive = T, showWarnings = F))
+```
+
+```{r}
+RPG_wide <- readRDS(here(dir$final, "RPG_Aggregated_ALL_wide.rds"))
+
+cultures_stat <- RPG_wide %>%
+  group_by(year) %>%
+  summarise(
+    N_communes = n_distinct(insee), 
+    surf_agri_year = sum(surf_agri_geo_unit_m2, na.rm = TRUE)
+  ) %>%
+  mutate(
+    mean_surf_agri_communes = surf_agri_year / N_communes,
+    mean_surf_agri_tot = mean(surf_agri_year)
+  )
+
+print(cultures_stat)
+```
+
+
