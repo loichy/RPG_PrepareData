@@ -18,8 +18,12 @@ pacman::p_load(tidyverse, data.table, here, sf, tmap, units, dplyr)
 # List directories 
 dir <- list()
 dir$root <- here()
+# For remote uncomment following dir
+# dir$root <- "/Users/lhenry/Data/RPG_PrepareData"
 dir$data <- here(dir$root, "data")
 dir$raw <- here(dir$data, "raw")
+# For accessing data on personal archive folder uncomment following line
+# dir$raw <- "C:/Users/loihenry/Dropbox/Recherche_Dauphine/DataArchive/RPG_data/Data/raw"
 dir$sf <- here(dir$data, "shapefiles")
 dir$derived <- here(dir$data, "derived")
 # dir$derived <- "C:/Users/loihenry/Dropbox/Recherche_Dauphine/DataArchive/RPG_data/Data/aggregated_communes"
@@ -35,8 +39,8 @@ lapply(dir, function(i) dir.create(i, recursive = T, showWarnings = F))
 #===============================================================================
 
 # List all RPG_Aggregated_<region_code>_<year>.rds files
-rds_files <- list.files(path = dir$derived, 
-                        pattern = "RPG_Aggregated*", 
+rds_files <- list.files(path = dir$derived,
+                        pattern = "RPG_Aggregated*",
                         full.names = TRUE)
 
 # To correct mistakes: list of rds files in 2013, or 2014  or R94
@@ -50,7 +54,8 @@ all_data_df <- bind_rows(all_data_list)
 #Clean Data
 all_data_clean <- all_data_df %>%
   filter(
-    as.numeric(surf_agri_geo_unit_m2) != 0 # Check conditions
+    as.numeric(surf_agri_geo_unit_m2) != 0, # Only keep communes with some agricultural land
+    as.numeric(surf_cult_m2) != 0 # Only keep culture groups in commune which are effectively cultivated
   ) %>% 
   filter(CODE_GROUP != "")
 
@@ -59,6 +64,39 @@ glimpse(all_data_clean)
 table(as.numeric(all_data_clean$year))
 unique(all_data_clean$region_code)
 table(all_data_clean$CODE_GROUP)
+
+#===============================================================================
+#3) Aggregate doublons associated with the spatial misaggregation  ------
+#===============================================================================
+# Les villes à la frontière des régions ont été capturées au moins deux fois.
+# Au lieu de supprimer les observations du "mauvais" fichier régional,
+# on agrège toutes les lignes pour un même triplet (year, insee, CODE_GROUP).
+
+
+all_data_final <- all_data_clean %>%
+  ungroup() %>%
+  group_by(year, insee, CODE_GROUP, CODE_CULTU) %>%
+  summarize(
+    # Conserver les métadonnées (prendre la première valeur non-NA)
+    data_type   = first(data_type),
+    name        = first(na.omit(name)),
+    
+    # Sommer les surfaces et les parcelles brutes
+    surf_cult_m2   = sum(as.numeric(surf_cult_m2),   na.rm = TRUE),
+    parcel_cult_n  = sum(as.numeric(parcel_cult_n),  na.rm = TRUE),
+    
+    # Sommer aussi les totaux communaux pondérés par la contribution de chaque ligne
+    # (chaque ligne ayant potentiellement un total communal différent selon sa région source)
+    surf_agri_geo_unit_m2 = sum(as.numeric(surf_agri_geo_unit_m2), na.rm = TRUE),
+    parcel_total_n        = sum(as.numeric(parcel_total_n),        na.rm = TRUE),
+    
+    .groups = "drop"
+  ) %>%
+  # Recalculer les pourcentages après agrégation
+  mutate(
+    surf_cult_perc  = surf_cult_m2  / surf_agri_geo_unit_m2,
+    parcel_cult_perc = parcel_cult_n / parcel_total_n
+  )
 
 #===============================================================================
 #3) Delete doublons associated with the spatial misaggregation  ------

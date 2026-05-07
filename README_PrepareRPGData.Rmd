@@ -21,9 +21,14 @@ The main objetive of the data preparation is to aggregate the plot level data at
 
 **Script:** `00_DownloadData.R`
 
-Downloads the raw RPG files for the analysis period (2007–2024) from the IGN public data service.
+Downloads the raw RPG files for the analysis period (2007–2023) from the IGN public data service.
 One individual download consist of one year-region vintage. This step thus downloads multiple
 files which are then stored in `data/raw/` for subsequent processing.
+
+Note that this script is no longer valid as IGN has changed its data delivery process.
+
+Once you've downloaded all data folders by region and year, you can then move to the next
+step.
 
 ## Step 2 — Aggregate Parcel Data
 

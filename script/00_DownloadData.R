@@ -1,5 +1,8 @@
 #===============================================================================
 # Description: Extract all file names of RPG data and download them
+# This script is no longer valid as IGN has changed its delivery of RPG files
+# Download manually all the files from the IGN website and store them in the data/raw folder.
+# Or execute only the end of this script with the loop using the URL links in the "rpg_file_withdownloadlinks.rds" file, which contains all the URL links of the RPG files (except for years 2013 and 2014 which were not available on the website and had to be downloaded by hand).
 #===============================================================================
 
 #===============================================================================
@@ -86,7 +89,7 @@ region_code_dta <- data.frame(
 )
 
 # Create dataframe with region and year of all existing files
-years <- as.character(c(2007:2023)) # Data exists from 2007 to 2023
+years <- as.character(c(2007:2024)) # Data exists from 2007 to 2023
 rpg_dta_structure <- expand.grid(year = years, region_name = region_code_dta$region_name) %>% # I make all the cartesian combinations of years and region code
   left_join(region_code_dta, by = "region_name") %>% # I add the region name
   dplyr::select(region_name, region_code, year)
@@ -130,7 +133,8 @@ all_rpg_links <- bind_rows(all_rpg_links, all_rpg_links_2013, all_rpg_links_2014
 # table(all_rpg_links$region_code, all_rpg_links$year)
 
 # Save all-rpg_lings dataset in RDS format
-saveRDS(all_rpg_links, here(dir$raw, "rpg_files.rds"))
+# saveRDS(all_rpg_links, here(dir$raw, "rpg_files_withdownloadlinks.rds"))
+saveRDS(rpg_dta_structure, here(dir$raw, "rpg_files.rds"))
 
 # Avant la boucle (à l'extérieur): créer une data frame vide ou une liste qui est vide
 tableau_final <- list()
