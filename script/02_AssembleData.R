@@ -75,20 +75,27 @@ table(all_data_clean$CODE_GROUP)
 
 all_data_final <- all_data_clean %>%
   ungroup() %>%
+  group_by(year, insee) %>% 
+  mutate(
+    # Recalculer la surface agricole de la commune comme étant la surface de toutes les cultures dans la commune
+    surf_agri_geo_unit_m2 = sum(surf_cult_m2),
+    # idem pour les parcelles
+    N_Parcels = sum(parcel_cult_n)
+  ) %>% 
+  ungroup() %>% 
   group_by(year, insee, CODE_GROUP, CODE_CULTU) %>%
   summarize(
     # Conserver les métadonnées (prendre la première valeur non-NA)
     data_type   = first(data_type),
-    name        = first(na.omit(name)),
+    name        = first(name),
+    region_code = first(region_code),
+    surf_tot_geo_unit_m2 = first(surf_tot_geo_unit_m2),
+    surf_agri_geo_unit_m2 = first(surf_agri_geo_unit_m2),
+    N_Parcels = first(N_Parcels),
     
     # Sommer les surfaces et les parcelles brutes
     surf_cult_m2   = sum(as.numeric(surf_cult_m2),   na.rm = TRUE),
     parcel_cult_n  = sum(as.numeric(parcel_cult_n),  na.rm = TRUE),
-    
-    # Sommer aussi les totaux communaux pondérés par la contribution de chaque ligne
-    # (chaque ligne ayant potentiellement un total communal différent selon sa région source)
-    surf_agri_geo_unit_m2 = sum(as.numeric(surf_agri_geo_unit_m2), na.rm = TRUE),
-    parcel_total_n        = sum(as.numeric(parcel_total_n),        na.rm = TRUE),
     
     .groups = "drop"
   ) %>%
@@ -96,6 +103,26 @@ all_data_final <- all_data_clean %>%
   mutate(
     surf_cult_perc  = surf_cult_m2  / surf_agri_geo_unit_m2,
     parcel_cult_perc = parcel_cult_n / parcel_total_n
+  )
+
+# Check that we indeed have the sum of the share of crop areas and parcels per commune and year which sums to one 
+table_stat <- all_data_final %>% 
+  group_by(year, insee) %>% 
+  summarize(
+    first(name),
+    total_surface_perc = sum(as.numeric(surf_cult_perc), na.rm = TRUE),
+    total_parcels_perc = sum(as.numeric(parcel_cult_perc), na.rm = TRUE),
+    .groups = "drop"
+  ) 
+
+table_stat_large <- table_stat %>% 
+  filter(
+    as.numeric(total_surface_perc) > 1.05 | as.numeric(total_parcels_perc) > 1.05
+  )
+
+table_stat_small <- table_stat %>% 
+  filter(
+    as.numeric(total_surface_perc) < 0.9 | as.numeric(total_parcels_perc) < 0.9
   )
 
 #===============================================================================
